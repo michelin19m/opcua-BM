@@ -20,7 +20,7 @@ log = logging.getLogger(__name__)
 
 # Map our type strings to asyncua VariantType
 _VTYPE: dict[str, ua.VariantType] = {
-    "Float":      ua.VariantType.Float,
+    "Float":      ua.VariantType.Double,
     "Int32":      ua.VariantType.Int32,
     "Boolean":    ua.VariantType.Boolean,
     "String":     ua.VariantType.String,
@@ -87,7 +87,7 @@ class OPCServer:
     async def _add_node(self, tag: dict) -> None:
         if tag["name"] in self._nodes:
             return
-        vtype   = _VTYPE.get(tag["data_type"], ua.VariantType.Float)
+        vtype   = _VTYPE.get(tag["data_type"], ua.VariantType.Double)
         default = _DEFAULT.get(tag["data_type"], 0.0)
         try:
             node = await self._server.nodes.objects.add_variable(
