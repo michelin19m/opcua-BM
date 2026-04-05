@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OPC UA SQL Bridge</title>
+<style>
+  :root {
+    --bg:       #f5f6f8;
+    --surface:  #ffffff;
+    --border:   #e2e5ea;
+    --text:     #1a1d23;
+    --muted:    #6b7280;
+    --accent:   #2563eb;
+    --accent-h: #1d4ed8;
+    --good:     #16a34a;
+    --bad:      #dc2626;
+    --warn:     #d97706;
+    --radius:   8px;
+    --shadow:   0 1px 3px rgba(0,0,0,.08);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; font-size: 14px; background: var(--bg); color: var(--text); }
+
+  /* ── Header ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky; top: 0; z-index: 100;
+  }
+  .logo { font-size: 16px; font-weight: 600; letter-spacing: -.3px; }
+  .logo span { color: var(--accent); }
+  .endpoint {
+    font-family: monospace; font-size: 12px;
+    background: #f0f4ff; color: var(--accent);
+    padding: 4px 10px; border-radius: 4px;
+    cursor: pointer; user-select: all;
+  }
+  .demo-badge {
+    font-size: 11px; font-weight: 600; letter-spacing: .5px;
+    background: #fef3c7; color: #92400e;
+    padding: 3px 8px; border-radius: 4px;
+  }
+
+  /* ── Stats bar ── */
+  .stats {
+    display: flex; gap: 12px;
+    padding: 16px 24px;
+  }
+  .stat {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 12px 20px;
+    min-width: 120px;
+  }
+  .stat-val { font-size: 24px; font-weight: 700; line-height: 1; }
+  .stat-lbl { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .stat.good .stat-val { color: var(--good); }
+  .stat.bad  .stat-val { color: var(--bad);  }
+
+  /* ── Main content ── */
+  .main { padding: 0 24px 40px; }
+
+  /* ── Toolbar ── */
+  .toolbar {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 12px;
+  }
+  .section-title { font-size: 15px; font-weight: 600; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: var(--radius);
+    font-size: 13px; font-weight: 500; cursor: pointer;
+    border: none; transition: background .15s;
+  }
+  .btn-primary { background: var(--accent); color: #fff; }
+  .btn-primary:hover { background: var(--accent-h); }
+  .btn-ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+  .btn-ghost:hover { background: var(--bg); }
+  .btn-danger { background: #fee2e2; color: var(--bad); border: 1px solid #fecaca; }
+  .btn-danger:hover { background: #fecaca; }
+
+  /* ── Add-tag form panel ── */
+  .form-panel {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .form-panel.open { display: block; }
+  .form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 160px 160px;
+    gap: 12px;
+    align-items: end;
+  }
+  .form-group { display: flex; flex-direction: column; gap: 4px; }
+  .form-group.span2 { grid-column: span 2; }
+  .form-group label { font-size: 12px; font-weight: 500; color: var(--muted); }
+  .form-group input, .form-group select {
+    padding: 8px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+    background: var(--surface);
+    color: var(--text);
+    outline: none;
+    width: 100%;
+  }
+  .form-group input:focus, .form-group select:focus { border-color: var(--accent); }
+  .form-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .form-error { color: var(--bad); font-size: 12px; margin-top: 8px; display: none; }
+
+  /* ── Table ── */
+  .table-wrap {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  table { width: 100%; border-collapse: collapse; }
+  thead { background: #f8fafc; }
+  th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: .5px;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    white-space: nowrap;
+  }
+  td {
+    padding: 11px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 13px;
+    vertical-align: middle;
+  }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #fafbfc; }
+
+  /* ── Cells ── */
+  .tag-name { font-weight: 500; }
+  .query-cell {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--muted);
+    font-family: monospace;
+    font-size: 11px;
+    cursor: help;
+  }
+  .value-cell {
+    font-family: monospace;
+    font-size: 13px;
+    font-weight: 500;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .ts-cell { font-size: 11px; color: var(--muted); white-space: nowrap; }
+
+  /* ── Quality badge ── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px; border-radius: 99px;
+    font-size: 11px; font-weight: 600; white-space: nowrap;
+  }
+  .badge::before { content:''; width:6px; height:6px; border-radius:50%; display:block; }
+  .badge-good    { background:#dcfce7; color:#15803d; }
+  .badge-good::before    { background: var(--good); }
+  .badge-bad     { background:#fee2e2; color:#b91c1c; }
+  .badge-bad::before     { background: var(--bad); }
+  .badge-pending { background:#f3f4f6; color:var(--muted); }
+  .badge-pending::before { background: #9ca3af; }
+
+  /* ── Toggle switch ── */
+  .toggle { position:relative; display:inline-block; width:36px; height:20px; }
+  .toggle input { opacity:0; width:0; height:0; }
+  .slider {
+    position:absolute; cursor:pointer; inset:0;
+    background:#d1d5db; border-radius:99px; transition:.2s;
+  }
+  .slider::before {
+    content:''; position:absolute;
+    width:14px; height:14px; left:3px; bottom:3px;
+    background:#fff; border-radius:50%; transition:.2s;
+  }
+  .toggle input:checked + .slider { background: var(--accent); }
+  .toggle input:checked + .slider::before { transform: translateX(16px); }
+
+  /* ── Actions cell ── */
+  .actions { display:flex; gap:6px; }
+  .icon-btn {
+    width:28px; height:28px; border-radius:6px; border:none;
+    display:flex; align-items:center; justify-content:center;
+    cursor:pointer; font-size:14px; background:transparent;
+    color: var(--muted); transition: background .15s;
+  }
+  .icon-btn:hover { background: var(--bg); }
+  .icon-btn.del:hover { background:#fee2e2; color:var(--bad); }
+
+  /* ── Empty state ── */
+  .empty {
+    text-align:center; padding:48px; color:var(--muted);
+  }
+  .empty-icon { font-size:32px; margin-bottom:12px; }
+
+  /* ── Spinner ── */
+  @keyframes spin { to { transform:rotate(360deg); } }
+  .spin { display:inline-block; animation:spin .7s linear infinite; }
+
+  /* ── Toast ── */
+  #toast {
+    position:fixed; bottom:24px; right:24px;
+    background:#1a1d23; color:#fff;
+    padding:10px 16px; border-radius:var(--radius);
+    font-size:13px; opacity:0; pointer-events:none;
+    transition:opacity .2s; z-index:999;
+  }
+  #toast.show { opacity:1; }
+</style>
+</head>
+<body>
+
+<header>
+  <div style="display:flex;align-items:center;gap:16px">
+    <div class="logo">OPC UA <span>SQL Bridge</span></div>
+    <span id="demo-badge" class="demo-badge" style="display:none">DEMO MODE</span>
+  </div>
+  <div style="display:flex;align-items:center;gap:12px">
+    <span id="endpoint" class="endpoint" title="Click to copy">–</span>
+    <span id="refresh-indicator" style="font-size:12px;color:var(--muted)"></span>
+  </div>
+</header>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="s-total">–</div><div class="stat-lbl">Total tags</div></div>
+  <div class="stat"><div class="stat-val" id="s-enabled">–</div><div class="stat-lbl">Enabled</div></div>
+  <div class="stat good"><div class="stat-val" id="s-good">–</div><div class="stat-lbl">Good quality</div></div>
+  <div class="stat"><div class="stat-val" id="s-nodes">–</div><div class="stat-lbl">OPC nodes</div></div>
+</div>
+
+<div class="main">
+  <div class="toolbar">
+    <div class="section-title">Tag Registry</div>
+    <button class="btn btn-primary" onclick="toggleForm()">+ Add Tag</button>
+  </div>
+
+  <!-- Add / Edit form -->
+  <div class="form-panel" id="form-panel">
+    <div style="font-size:13px;font-weight:600;margin-bottom:14px" id="form-title">New Tag</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Tag name</label>
+        <input id="f-name" placeholder="Temperature_1">
+      </div>
+      <div class="form-group">
+        <label>Data type</label>
+        <select id="f-type">
+          <option>Float</option>
+          <option>Int32</option>
+          <option>Boolean</option>
+          <option>String</option>
+          <option>FloatArray</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Poll interval (ms)</label>
+        <input id="f-interval" type="number" value="1000" min="500" step="500">
+      </div>
+      <div class="form-group">
+        <label>Enabled</label>
+        <select id="f-enabled">
+          <option value="true">Yes</option>
+          <option value="false">No</option>
+        </select>
+      </div>
+      <div class="form-group span2" style="grid-column:1/-1">
+        <label>SQL query (must return one value, or multiple columns for FloatArray)</label>
+        <input id="f-query" placeholder="SELECT value FROM sensors WHERE tag_name = 'TEMP1'">
+      </div>
+    </div>
+    <div class="form-error" id="form-error"></div>
+    <div class="form-actions">
+      <button class="btn btn-primary" onclick="submitForm()" id="submit-btn">Add Tag</button>
+      <button class="btn btn-ghost" onclick="cancelForm()">Cancel</button>
+    </div>
+  </div>
+
+  <!-- Tags table -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>SQL Query</th>
+          <th>Type</th>
+          <th>Interval</th>
+          <th>Current Value</th>
+          <th>Quality</th>
+          <th>Last Updated</th>
+          <th>Enabled</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="tag-tbody">
+        <tr><td colspan="9"><div class="empty"><div class="spin">⟳</div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+  let editingId = null;
+  let refreshTimer = null;
+
+  // ── Bootstrap ──────────────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    loadStatus();
+    loadTags();
+    startAutoRefresh();
+
+    document.getElementById('endpoint').addEventListener('click', () => {
+      const ep = document.getElementById('endpoint').textContent;
+      navigator.clipboard?.writeText(ep).then(() => toast('Endpoint copied'));
+    });
+  });
+
+  // ── Auto-refresh every 2 s ─────────────────────────────────────────────────
+  function startAutoRefresh() {
+    refreshTimer = setInterval(() => {
+      loadStatus();
+      loadTags();
+    }, 2000);
+  }
+
+  // ── API helpers ────────────────────────────────────────────────────────────
+  async function api(method, path, body) {
+    const opts = { method, headers: { 'Content-Type': 'application/json' } };
+    if (body !== undefined) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(err.detail || res.statusText);
+    }
+    return res.json();
+  }
+
+  // ── Status ─────────────────────────────────────────────────────────────────
+  async function loadStatus() {
+    try {
+      const s = await api('GET', '/api/status');
+      document.getElementById('s-total').textContent   = s.total_tags;
+      document.getElementById('s-enabled').textContent = s.enabled_tags;
+      document.getElementById('s-good').textContent    = s.good_quality;
+      document.getElementById('s-nodes').textContent   = s.opc_nodes;
+      document.getElementById('endpoint').textContent  = s.opc_endpoint;
+      document.getElementById('demo-badge').style.display = s.demo_mode ? '' : 'none';
+    } catch(_) {}
+  }
+
+  // ── Tags table ─────────────────────────────────────────────────────────────
+  async function loadTags() {
+    try {
+      const tags = await api('GET', '/api/tags');
+      renderTags(tags);
+    } catch(_) {}
+  }
+
+  function renderTags(tags) {
+    const tbody = document.getElementById('tag-tbody');
+    if (!tags.length) {
+      tbody.innerHTML = `<tr><td colspan="9"><div class="empty">
+        <div class="empty-icon">🏷</div>
+        <div>No tags yet. Click <strong>+ Add Tag</strong> to get started.</div>
+      </div></td></tr>`;
+      return;
+    }
+    tbody.innerHTML = tags.map(t => `
+      <tr id="row-${t.id}">
+        <td class="tag-name">${esc(t.name)}</td>
+        <td class="query-cell" title="${esc(t.sql_query)}">${esc(t.sql_query)}</td>
+        <td><code style="font-size:11px;background:#f3f4f6;padding:2px 6px;border-radius:4px">${t.data_type}</code></td>
+        <td style="color:var(--muted)">${t.poll_interval_ms} ms</td>
+        <td class="value-cell">${formatValue(t.current_value, t.data_type)}</td>
+        <td>${qualityBadge(t.quality, t.error)}</td>
+        <td class="ts-cell">${formatTs(t.timestamp)}</td>
+        <td>
+          <label class="toggle">
+            <input type="checkbox" ${t.enabled ? 'checked' : ''} onchange="toggleEnabled(${t.id}, this.checked)">
+            <span class="slider"></span>
+          </label>
+        </td>
+        <td>
+          <div class="actions">
+            <button class="icon-btn" title="Edit" onclick="openEdit(${t.id})">✏️</button>
+            <button class="icon-btn del" title="Delete" onclick="deleteTag(${t.id}, '${esc(t.name)}')">🗑</button>
+          </div>
+        </td>
+      </tr>
+    `).join('');
+  }
+
+  function formatValue(val, type) {
+    if (val === null || val === undefined) return '<span style="color:var(--muted)">–</span>';
+    if (Array.isArray(val)) return `[${val.map(v => typeof v === 'number' ? v.toFixed(2) : v).join(', ')}]`;
+    if (typeof val === 'number') return val.toFixed ? val.toFixed(2) : val;
+    if (typeof val === 'boolean') return val
+      ? '<span style="color:var(--good);font-weight:600">TRUE</span>'
+      : '<span style="color:var(--muted)">FALSE</span>';
+    return String(val);
+  }
+
+  function qualityBadge(q, error) {
+    if (q === 'Good')    return `<span class="badge badge-good">Good</span>`;
+    if (q === 'Bad')     return `<span class="badge badge-bad" title="${esc(error||'')}">Bad</span>`;
+    return `<span class="badge badge-pending">Pending</span>`;
+  }
+
+  function formatTs(ts) {
+    if (!ts) return '–';
+    const d = new Date(ts);
+    return d.toLocaleTimeString([], { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+
+  // ── Actions ────────────────────────────────────────────────────────────────
+  async function toggleEnabled(id, enabled) {
+    try {
+      await api('PATCH', `/api/tags/${id}/enabled?enabled=${enabled}`);
+    } catch(e) { toast('Error: ' + e.message, true); loadTags(); }
+  }
+
+  async function deleteTag(id, name) {
+    if (!confirm(`Delete tag "${name}"? This will also remove its OPC UA node.`)) return;
+    try {
+      await api('DELETE', `/api/tags/${id}`);
+      toast(`Tag "${name}" deleted`);
+      loadTags(); loadStatus();
+    } catch(e) { toast('Error: ' + e.message, true); }
+  }
+
+  // ── Form ───────────────────────────────────────────────────────────────────
+  function toggleForm() {
+    const panel = document.getElementById('form-panel');
+    if (panel.classList.contains('open') && editingId === null) {
+      cancelForm();
+    } else {
+      editingId = null;
+      clearForm();
+      document.getElementById('form-title').textContent = 'New Tag';
+      document.getElementById('submit-btn').textContent = 'Add Tag';
+      panel.classList.add('open');
+    }
+  }
+
+  async function openEdit(id) {
+    const tags = await api('GET', '/api/tags');
+    const tag  = tags.find(t => t.id === id);
+    if (!tag) return;
+    editingId = id;
+    document.getElementById('f-name').value     = tag.name;
+    document.getElementById('f-query').value    = tag.sql_query;
+    document.getElementById('f-interval').value = tag.poll_interval_ms;
+    document.getElementById('f-type').value     = tag.data_type;
+    document.getElementById('f-enabled').value  = tag.enabled ? 'true' : 'false';
+    document.getElementById('form-title').textContent = `Edit Tag — ${tag.name}`;
+    document.getElementById('submit-btn').textContent = 'Save Changes';
+    document.getElementById('form-panel').classList.add('open');
+    document.getElementById('f-name').scrollIntoView({ behavior:'smooth', block:'center' });
+  }
+
+  function cancelForm() {
+    editingId = null;
+    clearForm();
+    document.getElementById('form-panel').classList.remove('open');
+  }
+
+  function clearForm() {
+    ['f-name','f-query'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('f-interval').value = '1000';
+    document.getElementById('f-type').value     = 'Float';
+    document.getElementById('f-enabled').value  = 'true';
+    hideError();
+  }
+
+  async function submitForm() {
+    const name     = document.getElementById('f-name').value.trim();
+    const query    = document.getElementById('f-query').value.trim();
+    const interval = parseInt(document.getElementById('f-interval').value, 10);
+    const type     = document.getElementById('f-type').value;
+    const enabled  = document.getElementById('f-enabled').value === 'true';
+
+    if (!name)  { showError('Tag name is required'); return; }
+    if (!query) { showError('SQL query is required'); return; }
+    if (isNaN(interval) || interval < 500) { showError('Poll interval must be ≥ 500 ms'); return; }
+
+    const payload = { name, sql_query: query, poll_interval_ms: interval, data_type: type, enabled };
+
+    try {
+      document.getElementById('submit-btn').textContent = '…';
+      if (editingId) {
+        await api('PUT', `/api/tags/${editingId}`, payload);
+        toast('Tag updated');
+      } else {
+        await api('POST', '/api/tags', payload);
+        toast('Tag added');
+      }
+      cancelForm();
+      loadTags(); loadStatus();
+    } catch(e) {
+      showError(e.message);
+    } finally {
+      document.getElementById('submit-btn').textContent = editingId ? 'Save Changes' : 'Add Tag';
+    }
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('form-error');
+    el.textContent = msg; el.style.display = 'block';
+  }
+  function hideError() {
+    document.getElementById('form-error').style.display = 'none';
+  }
+
+  // ── Helpers ────────────────────────────────────────────────────────────────
+  function esc(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function toast(msg, isErr) {
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.style.background = isErr ? '#b91c1c' : '#1a1d23';
+    el.classList.add('show');
+    setTimeout(() => el.classList.remove('show'), 2500);
+  }
+</script>
+</body>
+</html>
