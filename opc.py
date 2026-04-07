@@ -24,7 +24,10 @@ _VTYPE: dict[str, ua.VariantType] = {
     "Int32":      ua.VariantType.Int32,
     "Boolean":    ua.VariantType.Boolean,
     "String":     ua.VariantType.String,
-    "FloatArray": ua.VariantType.Float,   # element type; value will be a list
+    "FloatArray": ua.VariantType.Double,   # element type; value will be a list
+    "Int32Array": ua.VariantType.Int32,
+    "BooleanArray": ua.VariantType.Boolean,
+    "StringArray": ua.VariantType.String,
 }
 
 # Sensible zero-values for each type
@@ -34,6 +37,9 @@ _DEFAULT: dict[str, Any] = {
     "Boolean":    False,
     "String":     "",
     "FloatArray": [],
+    "Int32Array": [],
+    "BooleanArray": [],
+    "StringArray": [],
 }
 
 
@@ -42,6 +48,7 @@ class OPCServer:
         self._server: Optional[Server] = None
         self._idx:    Optional[int]    = None
         self._nodes:  dict[str, Any]   = {}   # name → asyncua node
+        self._node_types: dict[str, str] = {} # name -> registry data_type
         self._ready   = asyncio.Event()
 
     # ── Lifecycle ─────────────────────────────────────────────────────────────
@@ -78,6 +85,7 @@ class OPCServer:
     async def remove_node(self, tag_name: str) -> None:
         """Called when a tag is deleted via the REST API."""
         node = self._nodes.pop(tag_name, None)
+        self._node_types.pop(tag_name, None)
         if node and self._server:
             try:
                 await self._server.delete_nodes([node], recursive=True)
@@ -94,6 +102,7 @@ class OPCServer:
                 self._idx, tag["name"], default, vtype
             )
             self._nodes[tag["name"]] = node
+            self._node_types[tag["name"]] = tag["data_type"]
             log.debug("OPC node created: %s (%s)", tag["name"], tag["data_type"])
         except Exception as e:
             log.error("Failed to create OPC node %s: %s", tag["name"], e)
@@ -106,9 +115,13 @@ class OPCServer:
         node = self._nodes.get(name)
         if not node:
             return
+        data_type = self._node_types.get(name, "Float")
+        vtype = _VTYPE.get(data_type, ua.VariantType.Double)
         try:
+            if data_type.endswith("Array"):
+                value = list(value) if isinstance(value, (list, tuple)) else [value]
             dv = ua.DataValue(
-                Value=ua.Variant(value),
+                Value=ua.Variant(value, vtype),
                 SourceTimestamp=datetime.now(timezone.utc),
             )
             await node.write_value(dv)

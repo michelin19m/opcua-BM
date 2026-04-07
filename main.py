@@ -108,9 +108,20 @@ async def create_tag(tag: Tag):
 
 @app.put("/api/tags/{tag_id}")
 async def edit_tag(tag_id: int, tag: Tag):
-    if not await get_tag_by_id(tag_id):
+    current = await get_tag_by_id(tag_id)
+    if not current:
         raise HTTPException(404, "Tag not found")
+
+    # OPC UA node identity and data type are baked at creation; recreate node
+    # when either name or type changes to avoid type-mismatch writes.
+    if current["name"] != tag.name or current["data_type"] != tag.data_type:
+        await opc.remove_node(current["name"])
+
     await update_tag(tag_id, tag)
+    updated = await get_tag_by_id(tag_id)
+    if updated and (current["name"] != tag.name or current["data_type"] != tag.data_type):
+        await opc.add_node(updated)
+
     await engine.reload()
     return {"ok": True}
 

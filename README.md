@@ -42,17 +42,24 @@ The OPC UA server listens on **opc.tcp://localhost:4840/opcua/bridge**.
 
 ## Tag data types
 
-| Type       | OPC UA type   | SQL return value                          |
-|------------|---------------|-------------------------------------------|
-| Float      | Float         | Single numeric column                     |
-| Int32      | Int32         | Single integer column                     |
-| Boolean    | Boolean       | 0/1 or true/false                         |
-| String     | String        | Single text column                        |
-| FloatArray | Float[]       | Multiple numeric columns in one row       |
+| Type         | OPC UA type   | SQL return value                               |
+|--------------|---------------|------------------------------------------------|
+| Float        | Double        | Single numeric column                          |
+| Int32        | Int32         | Single integer column                          |
+| Boolean      | Boolean       | 0/1 or true/false                              |
+| String       | String        | Single text column                             |
+| FloatArray   | Double[]      | Multiple values (columns or rows)              |
+| Int32Array   | Int32[]       | Multiple integer values (columns or rows)      |
+| BooleanArray | Boolean[]     | Multiple boolean-like values (columns or rows) |
+| StringArray  | String[]      | Multiple text values (columns or rows)         |
 
-### FloatArray example query
+### Array example queries
 ```sql
 SELECT axis_x, axis_y, axis_z FROM vibration_sensors WHERE sensor_id = 42
+```
+
+```sql
+SELECT sample_value FROM vibration_samples WHERE sensor_id = 42 ORDER BY ts DESC
 ```
 
 ### Efficiency tips

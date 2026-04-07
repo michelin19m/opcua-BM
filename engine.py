@@ -129,9 +129,17 @@ class PollingEngine:
                     rows = cursor.fetchall()
                     if not rows:
                         results[tag["name"]] = {"value": None, "error": "No rows returned"}
-                    elif tag["data_type"] == "FloatArray":
-                        # Multiple columns on a single row → array
-                        results[tag["name"]] = {"value": list(rows[0]), "error": None}
+                    elif str(tag["data_type"]).endswith("Array"):
+                        # Support both:
+                        # - one row with multiple columns: SELECT v1, v2, v3 ...
+                        # - multiple rows with one column: SELECT value FROM ...
+                        if len(rows) == 1:
+                            array_val = list(rows[0])
+                        elif len(rows[0]) == 1:
+                            array_val = [r[0] for r in rows]
+                        else:
+                            array_val = [col for r in rows for col in r]
+                        results[tag["name"]] = {"value": array_val, "error": None}
                     else:
                         results[tag["name"]] = {"value": rows[0][0], "error": None}
                 except Exception as e:
@@ -157,6 +165,13 @@ class PollingEngine:
                 val = random.random() > 0.3
             elif dt == "FloatArray":
                 val = [round(random.gauss(50, 5), 2) for _ in range(5)]
+            elif dt == "Int32Array":
+                val = [random.randint(0, 500) for _ in range(5)]
+            elif dt == "BooleanArray":
+                val = [random.random() > 0.3 for _ in range(5)]
+            elif dt == "StringArray":
+                base = ["RUNNING", "IDLE", "FAULT", "STOPPED", "MANUAL"]
+                val = [random.choice(base) for _ in range(5)]
             else:
                 val = random.choice(["RUNNING", "IDLE", "FAULT"])
             results[tag["name"]] = {"value": val, "error": None}
@@ -169,19 +184,34 @@ class PollingEngine:
     def _coerce(value: Any, data_type: str) -> Any:
         if value is None:
             return None
+
+        def to_bool(v: Any) -> bool:
+            if isinstance(v, str):
+                return v.strip().lower() in ("1", "true", "yes", "on")
+            return bool(v)
+
+        def as_array(raw: Any) -> list[Any]:
+            if isinstance(raw, (list, tuple)):
+                return list(raw)
+            if isinstance(raw, str):
+                return [p.strip() for p in raw.split(",") if p.strip()]
+            return [raw]
+
         try:
             if data_type == "Float":
                 return float(value)
             if data_type == "Int32":
                 return int(value)
             if data_type == "Boolean":
-                if isinstance(value, str):
-                    return value.strip().lower() in ("1", "true", "yes", "on")
-                return bool(value)
+                return to_bool(value)
             if data_type == "FloatArray":
-                if isinstance(value, (list, tuple)):
-                    return [float(v) for v in value]
-                return [float(value)]
+                return [float(v) for v in as_array(value)]
+            if data_type == "Int32Array":
+                return [int(v) for v in as_array(value)]
+            if data_type == "BooleanArray":
+                return [to_bool(v) for v in as_array(value)]
+            if data_type == "StringArray":
+                return [str(v) for v in as_array(value)]
             return str(value)       # String fallback
         except (TypeError, ValueError):
             return None

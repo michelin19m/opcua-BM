@@ -275,6 +275,9 @@
           <option>Boolean</option>
           <option>String</option>
           <option>FloatArray</option>
+          <option>Int32Array</option>
+          <option>BooleanArray</option>
+          <option>StringArray</option>
         </select>
       </div>
       <div class="form-group">
@@ -289,7 +292,7 @@
         </select>
       </div>
       <div class="form-group span2" style="grid-column:1/-1">
-        <label>SQL query (must return one value, or multiple columns for FloatArray)</label>
+        <label>SQL query (single value for scalar types; multi-value result for array types)</label>
         <input id="f-query" placeholder="SELECT value FROM sensors WHERE tag_name = 'TEMP1'">
       </div>
     </div>
@@ -356,9 +359,26 @@
     const res = await fetch(path, opts);
     if (!res.ok) {
       const err = await res.json().catch(() => ({ detail: res.statusText }));
-      throw new Error(err.detail || res.statusText);
+      throw new Error(formatApiError(err, res.statusText));
     }
     return res.json();
+  }
+
+  function formatApiError(err, fallback) {
+    const detail = err?.detail;
+    if (typeof detail === 'string' && detail.trim()) return detail;
+    if (Array.isArray(detail) && detail.length) {
+      const msgs = detail
+        .map(item => {
+          const path = Array.isArray(item?.loc) ? item.loc.join('.') : 'request';
+          const msg = item?.msg || 'invalid value';
+          return `${path}: ${msg}`;
+        })
+        .filter(Boolean);
+      if (msgs.length) return msgs.join(' | ');
+    }
+    if (typeof err?.message === 'string' && err.message.trim()) return err.message;
+    return fallback || 'Request failed';
   }
 
   // ── Status ─────────────────────────────────────────────────────────────────
@@ -419,6 +439,7 @@
   function formatValue(val, type) {
     if (val === null || val === undefined) return '<span style="color:var(--muted)">–</span>';
     if (Array.isArray(val)) return `[${val.map(v => typeof v === 'number' ? v.toFixed(2) : v).join(', ')}]`;
+    if (type === 'Int32' && typeof val === 'number') return Math.trunc(val);
     if (typeof val === 'number') return val.toFixed ? val.toFixed(2) : val;
     if (typeof val === 'boolean') return val
       ? '<span style="color:var(--good);font-weight:600">TRUE</span>'

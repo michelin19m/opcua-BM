@@ -3,7 +3,49 @@ from typing import Optional
 from pydantic import BaseModel, field_validator
 from config import REGISTRY_DB, MIN_POLL_MS
 
-VALID_TYPES = {"Float", "Int32", "Boolean", "String", "FloatArray"}
+VALID_TYPES = {
+    "Float", "Int32", "Boolean", "String",
+    "FloatArray", "Int32Array", "BooleanArray", "StringArray",
+}
+
+TYPE_ALIASES = {
+    "float": "Float",
+    "double": "Float",
+    "real": "Float",
+    "single": "Float",
+    "int": "Int32",
+    "int32": "Int32",
+    "integer": "Int32",
+    "bool": "Boolean",
+    "boolean": "Boolean",
+    "string": "String",
+    "text": "String",
+    "varchar": "String",
+    "floatarray": "FloatArray",
+    "float[]": "FloatArray",
+    "intarray": "Int32Array",
+    "int[]": "Int32Array",
+    "int32array": "Int32Array",
+    "int32[]": "Int32Array",
+    "boolarray": "BooleanArray",
+    "booleanarray": "BooleanArray",
+    "bool[]": "BooleanArray",
+    "boolean[]": "BooleanArray",
+    "stringarray": "StringArray",
+    "string[]": "StringArray",
+    "textarray": "StringArray",
+    "varchararray": "StringArray",
+}
+
+
+def normalize_data_type(value: str) -> str:
+    if value in VALID_TYPES:
+        return value
+    key = value.strip().lower()
+    normalized = TYPE_ALIASES.get(key)
+    if normalized:
+        return normalized
+    raise ValueError(f"data_type must be one of {VALID_TYPES}")
 
 
 class Tag(BaseModel):
@@ -22,9 +64,7 @@ class Tag(BaseModel):
     @field_validator("data_type")
     @classmethod
     def validate_type(cls, v: str) -> str:
-        if v not in VALID_TYPES:
-            raise ValueError(f"data_type must be one of {VALID_TYPES}")
-        return v
+        return normalize_data_type(v)
 
 
 async def init_db() -> None:
