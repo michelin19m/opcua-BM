@@ -1,4 +1,5 @@
 import aiosqlite
+import re
 from typing import Optional
 from pydantic import BaseModel, field_validator
 from config import REGISTRY_DB, MIN_POLL_MS
@@ -37,6 +38,36 @@ TYPE_ALIASES = {
     "varchararray": "StringArray",
 }
 
+_SQL_MUTATION_TOKENS = (
+    "insert", "update", "delete", "merge",
+    "drop", "alter", "create", "truncate",
+    "exec", "execute",
+)
+
+
+def validate_select_only(sql: str) -> str:
+    q = (sql or "").strip()
+    if not q:
+        raise ValueError("sql_query is required")
+
+    # Permit WITH ... SELECT ... forms as read-only queries.
+    lowered = q.lower()
+    if not (lowered.startswith("select") or lowered.startswith("with")):
+        raise ValueError("Only SELECT statements are allowed")
+
+    # Remove string literals before scanning for dangerous tokens.
+    stripped = re.sub(r"'([^']|'')*'", "''", lowered)
+    stripped = re.sub(r'"([^"]|"")*"', '""', stripped)
+
+    # Block obvious multi-statement attempts.
+    if ";" in stripped:
+        raise ValueError("Multiple SQL statements are not allowed")
+
+    for token in _SQL_MUTATION_TOKENS:
+        if re.search(rf"\b{token}\b", stripped):
+            raise ValueError(f"Forbidden SQL keyword detected: {token.upper()}")
+    return q
+
 
 def normalize_data_type(value: str) -> str:
     if value in VALID_TYPES:
@@ -65,6 +96,11 @@ class Tag(BaseModel):
     @classmethod
     def validate_type(cls, v: str) -> str:
         return normalize_data_type(v)
+
+    @field_validator("sql_query")
+    @classmethod
+    def validate_sql_query(cls, v: str) -> str:
+        return validate_select_only(v)
 
 
 async def init_db() -> None:
