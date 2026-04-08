@@ -11,6 +11,7 @@ import threading
 import webbrowser
 
 import uvicorn
+from main import app
 
 
 def _open_ui() -> None:
@@ -21,7 +22,7 @@ def main() -> None:
     # Delay browser open so server has time to bind.
     threading.Timer(1.5, _open_ui).start()
     uvicorn.run(
-        "main:app",
+        app,
         host="0.0.0.0",
         port=8000,
         reload=False,
