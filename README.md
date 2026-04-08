@@ -24,6 +24,33 @@ Open **http://localhost:8000** in your browser.
 
 The OPC UA server listens on **opc.tcp://localhost:4840/opcua/bridge**.
 
+## Build executable with PyInstaller (Windows)
+
+Use `run_app.py` as the entry point. It starts the server and opens the web UI
+automatically in your default browser.
+
+```bash
+# 1) Install build tool
+pip install pyinstaller
+
+# 2) Build (run from project root)
+pyinstaller --noconfirm --clean --name OPCUABridge ^
+  --onedir --console ^
+  --add-data "static;static" ^
+  run_app.py
+```
+
+Run:
+
+```bash
+dist\OPCUABridge\OPCUABridge.exe
+```
+
+Notes:
+- Keep `config.py` next to the executable bundle if you want editable settings.
+- If Windows blocks DB connection, install SQL Server ODBC driver on target host.
+- `--onedir` is recommended for this app because static assets are simpler to ship.
+
 ---
 
 ## REST API
