@@ -46,6 +46,10 @@ Run:
 dist\OPCUABridge\OPCUABridge.exe
 ```
 
+Browser behavior:
+- default: opens web UI automatically
+- service/headless mode: set environment variable `OPEN_BROWSER=0`
+
 Notes:
 - Keep `config.py` next to the executable bundle if you want editable settings.
 - If Windows blocks DB connection, install SQL Server ODBC driver on target host.
