@@ -5,6 +5,8 @@ Run with:  uvicorn main:app --host 0.0.0.0 --port 8000 --reload
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException
@@ -152,4 +154,11 @@ async def cache_snapshot():
 
 
 # ── Static frontend (must be last) ────────────────────────────────────────────
-app.mount("/", StaticFiles(directory="static", html=True), name="static")
+def _resolve_static_dir() -> Path:
+    # PyInstaller one-dir/one-file extraction dir
+    if hasattr(sys, "_MEIPASS"):
+        return Path(getattr(sys, "_MEIPASS")) / "static"
+    return Path(__file__).resolve().parent / "static"
+
+
+app.mount("/", StaticFiles(directory=str(_resolve_static_dir()), html=True), name="static")
